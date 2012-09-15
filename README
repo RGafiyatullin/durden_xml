@@ -1,0 +1,26 @@
+durden_xml is a simple xmerl frontend which enables using XML-namespaces the way they should be used.
+
+Examples:
+
+-define(XML_NS_XHTML, "http://www.w3.org/1999/xhtml").
+RootNode = ?xml:node({"html", ?XML_NS_XHTML}, [], [
+	?xml:node({"head", ?XML_NS_XHTML}, [], []),
+	?xml:node({"body", ?XML_NS_XHTML}, 
+		[{"onload", "alert('Actually I wouldn't do this in real life')"}], 
+		["Hello there!"])
+]).
+NamespacesImported = ?xml:imp_ns(?XML_NS_XHTML, "xh").
+?xml:render(
+	?xml:set_omit_prefixes(NamespacesImported, true)
+).
+
+The latter code will produce the following XML:
+<xh:html xmlns:xh="http://www.w3.org/1999/xhtml">
+	<head/>
+	<body onload="alert('Actually I wouldn't do this in real life')" />
+</xh:html>
+
+* Namespaces are resolved into the prefixes while rendering only
+* NS-prefixes can be optionally omitted when the element shares the same namespace as its parent node.
+* Attributes' values and elements' text can be specified as ?xml:qname(NCName, NSName) - they will be resolved into NS:NCN during render
+
