@@ -20,32 +20,71 @@
 	children = [] :: [ #xml_node{} ],
 	omit_prefixes = undefined :: boolean()
 	}).
+
+-record(s, {
+		ns = undefined,
+		prefixes = ?dict_m:new(),
+		omit_prefixes = false
+	}).
+
 -type xml_node() :: #xml_node{}.
 -type xml_attr() :: { 
 						string(), 
 						string() | atom() | integer() | binary() | iolist()
 					}.
 
--spec qname( xml_ncname(), xml_ns() ) -> {qname, {xml_ns(), xml_ncname()} }.
+%% 
+%% Creates a QName structure which will be converted into prefix:ncname while rendering
+%%
+-spec qname( 
+	NCName :: xml_ncname(), 
+	XmlNS :: xml_ns() 
+) -> 
+	{ qname, {xml_ns(), xml_ncname()} }.
+
 qname(NCN, NS) -> {qname, {NS, NCN} }.
 
--spec node( xml_ncname() ) -> #xml_node{}.
+%%
+%% Creates a Node with a non-qualified name (XmlNS will be inherrited)
+%%
+-spec node(
+	NCName :: xml_ncname()
+) ->
+	xml_node().
+
 node(NCName) ->
 	#xml_node{
 		ncname = NCName
 	}.
--spec node( xml_ncname(), xml_ns() ) -> #xml_node{}.
+
+%%
+%% Creates a Node with a full-qualified name
+%% 
+-spec node( 
+	NCName :: xml_ncname(),
+	XmlNS :: xml_ns()
+) -> 
+	xml_node().
+
 node(NCName, NS) ->
 	#xml_node{
 		ns = NS,
 		ncname = NCName
 	}.
 
+%%
+%% Create a Node with 
+%% - a full-qualified name
+%% - xml-attributes
+%% - child-nodes
+%%
 -spec node(
 	QName :: { xml_ncname(), xml_ns() },
 	Attrs :: [ xml_attr() ],
 	Children :: [ xml_node() ]
-	) -> xml_node().
+) -> 
+	xml_node().
+
 node({ NCN, NS }, Attrs, Children) ->
 	attrs(
 		Attrs,
@@ -55,39 +94,75 @@ node({ NCN, NS }, Attrs, Children) ->
 		)
 	).
 
--spec set_omit_prefixes( #xml_node{}, Mode :: boolean() ) -> #xml_node{}.
+%%
+%% Turn on or off prefixes-ommitment while rendering.
+%% Unless explicitely specified - the property is inherrited.
+%%
+-spec set_omit_prefixes( 
+	Node :: xml_node(), 
+	Mode :: boolean() | undefined
+) -> 
+	xml_node().
+
 set_omit_prefixes( Node = #xml_node{}, Mode ) ->
 	Node #xml_node{
 		omit_prefixes = Mode
 	}.
 
--spec imp_ns(NS :: xml_ns(), Prefix :: xml_ncname(), #xml_node{} ) -> #xml_node{}.
+%%
+%% Ipmort namespace using the specified prefix.
+%%
+-spec imp_ns(
+	NS :: xml_ns(), 
+	Prefix :: xml_ncname(), 
+	xml_node()
+) -> 
+	xml_node().
+
 imp_ns( NS, Prefix, Node = #xml_node{ imports = Imports } ) ->
 	Node #xml_node{
 		imports = ?dict_m:store( NS, Prefix, Imports )
 	}.
 
--spec attrs( Attrs :: [ {xml_ncname(), string()} ], Node :: #xml_node{} ) -> #xml_node{}.
+%%
+%% Add attributes to the node
+%%
+-spec attrs( 
+	Attrs :: [ {xml_ncname(), string()} ], 
+	Node :: xml_node()
+) -> 
+	xml_node().
+
 attrs( NewAttrs, Node = #xml_node{ attrs = Attrs } ) ->
 	Node #xml_node{
 		attrs = Attrs ++ NewAttrs
 	}.
 
--spec add( [ Child :: #xml_node{} ], Parent :: #xml_node{} ) -> NewParent :: #xml_node{}.
+%%
+%% Add children to the node
+%%
+-spec add( 
+	Children :: [ Child :: #xml_node{} ], 
+	Parent :: xml_node()
+) -> 
+	NewParent :: xml_node().
+
 add( NewChildren, Parent = #xml_node{ children = Children } ) ->
 	Parent #xml_node{ children = Children ++ NewChildren }.
 
+%%
+%% Render the node into IO-list
+%%
+-spec render( 
+	Node :: xml_node()
+) -> 
+	iolist().
 
--record(s, {
-		ns = undefined,
-		prefixes = ?dict_m:new(),
-		omit_prefixes = false
-	}).
-
--spec render( #xml_node{} ) -> iolist().
 render( Node = #xml_node{} ) ->
 	XmerlElement = to_xmerl( Node, #s{} ),
 	xmerl:export([ XmerlElement ], xmerl_xml, []).
+
+%%%%% Internal %%%%%%
 
 to_xmerl( _Node = #xml_node{
 		ns = NodeNS,
@@ -113,6 +188,10 @@ to_xmerl( _Node = #xml_node{
 		end, 
 		CtxPrefixes, Imports
 	),
+
+	% Determine whether we should omit prefixes for this node
+	% If the properties for this node do not specify it implicitely - 
+	%   act the same way we did working with the parent node.
 	OmitPrefixes = 
 		case NodeOmitPrefixes of
 			undefined ->
@@ -120,6 +199,7 @@ to_xmerl( _Node = #xml_node{
 			_ when in(NodeOmitPrefixes, [true, false]) ->
 				NodeOmitPrefixes
 		end,
+
 	TagName = 
 		case OmitPrefixes of
 			true ->
@@ -142,6 +222,7 @@ to_xmerl( _Node = #xml_node{
 			|| Child <- Children
 		]
 	};
+
 to_xmerl( Text, _Ctx = #s{} ) when is_list(Text) ->
 	#xmlText{ value = Text }.
 
@@ -162,7 +243,6 @@ render_attribute_value({ qname, {NS, NCN} }, Prefixes) ->
 		_ -> P ++ ":"
 	end
 	++ NCN,
-	% io:format("Binding {~p}~p => ~p~n", [NS, NCN, Bound]),
 	Bound;
 
 render_attribute_value(V, _Prefixes) -> V.
